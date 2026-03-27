@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RescueRoad - User Module</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .voice-btn-container {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            z-index: 1000;
+        }
+        .voice-btn {
+            width: 70px;
+            height: 70px;
+            background: var(--primary);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.8rem;
+            box-shadow: 0 10px 30px var(--primary-glow);
+            cursor: pointer;
+            transition: 0.3s;
+            border: 4px solid var(--bg-card);
+        }
+        .voice-btn.listening {
+            background: #ef4444;
+            animation: pulse-red 1.5s infinite;
+        }
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 20px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        .voice-feedback {
+            position: absolute;
+            bottom: 85px;
+            right: 0;
+            background: var(--bg-card);
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            border: 1px solid var(--glass-border);
+            width: 250px;
+            display: none;
+            text-align: center;
+            font-size: 0.9rem;
+        }
+        .user-welcome {
+            margin-bottom: 3rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .service-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 2rem;
+        }
+        .service-card {
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 2.5rem;
+            transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+        .service-card:hover {
+            transform: translateY(-12px);
+            border-color: var(--primary);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+        .service-card h2 {
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+        }
+        .service-card p {
+            color: #e2e8f0; /* Brighter color for visibility */
+            font-size: 1.1rem;
+            line-height: 1.6;
+        }
+        .service-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+        .emergency-btn {
+            background: linear-gradient(135deg, #ef4444, #991b1b);
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
+        }
+        .emergency-btn:hover {
+            box-shadow: 0 8px 25px rgba(239, 68, 68, 0.5);
+        }
+        .card-bg-icon {
+            position: absolute;
+            right: -20px;
+            bottom: -20px;
+            font-size: 8rem;
+            opacity: 0.05;
+            transform: rotate(-15deg);
+        }
+
+        /* Loading Overlay */
+        #request-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(10px);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+        .loader {
+            width: 60px;
+            height: 60px;
+            border: 5px solid var(--glass-border);
+            border-top: 5px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 2rem;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <header class="glass-header">
+        <nav class="container">
+            <a href="index.html" class="logo">Rescue<span>Road</span></a>
+            <div style="display: flex; align-items: center; gap: 2rem;">
+                <div class="user-profile" style="display: flex; align-items: center; gap: 10px;">
+                    <span id="header-user-name" style="font-weight: 600;">Guest User</span>
+                    <div id="header-user-initial" style="width: 40px; height: 40px; border-radius: 50%; background: var(--primary); display: flex; justify-content: center; align-items: center; font-weight: bold;">G</div>
+                </div>
+                <a href="index.html" class="btn btn-outline" style="padding: 0.5rem 1.2rem;" onclick="localStorage.clear()">Logout</a>
+            </div>
+        </nav>
+    </header>
+
+    <main class="dashboard-main container">
+        <!-- Voice Command Button -->
+        <div class="voice-btn-container">
+            <div id="voice-feedback" class="voice-feedback">
+                <p id="voice-status">Say "Request Fuel" or "Help Me"</p>
+                <div id="voice-transcript" style="font-style: italic; color: var(--primary); margin-top: 5px;"></div>
+            </div>
+            <button id="voice-trigger" class="voice-btn" onclick="toggleVoice()">🎙️</button>
+        </div>
+        <div class="user-welcome">
+            <div>
+                <h1 style="font-size: 2.5rem; margin-bottom: 0.5rem;">User Module</h1>
+                <p style="color: var(--text-dim);">Select a service to get immediate assistance on the road.</p>
+            </div>
+            <a href="tips.html" class="btn btn-outline" style="border-color: #f59e0b; color: #f59e0b;">🛡️ Safety Tips</a>
+        </div>
+
+        <div class="service-grid">
+            <!-- Emergency Alert -->
+            <div class="service-card" style="border-top: 4px solid #ef4444;">
+                <div class="service-icon">🚨</div>
+                <div>
+                    <h2>Emergency Alert</h2>
+                    <p>Critical emergency? Instant dispatch of medical or security task force to your GPS location.</p>
+                </div>
+                <button class="btn emergency-btn" onclick="openLocationModal('Emergency Alert')">Activate Emergency</button>
+                <div class="card-bg-icon">🆘</div>
+            </div>
+
+            <!-- Breakdown -->
+            <div class="service-card" style="border-top: 4px solid var(--secondary);">
+                <div class="service-icon">🛠️</div>
+                <div>
+                    <h2>Breakdown</h2>
+                    <p>Mechanical failure, flat tire, or engine issues. Professional mechanics are on standby.</p>
+                </div>
+                <button class="btn btn-primary" style="background: var(--secondary);" onclick="openLocationModal('Breakdown Assistance')">Request Mechanic</button>
+                <div class="card-bg-icon">⚙️</div>
+            </div>
+
+            <!-- Fuel Assistance -->
+            <div class="service-card" style="border-top: 4px solid var(--primary);">
+                <div class="service-icon">⛽</div>
+                <div>
+                    <h2>Fuel Assistance</h2>
+                    <p>Ran out of juice? We deliver Petrol, Diesel, or EV portable charging directly to you.</p>
+                </div>
+                <button class="btn btn-primary" onclick="openLocationModal('Fuel Delivery')">Order Fuel</button>
+                <div class="card-bg-icon">📍</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Global Notification Toast -->
+    <div id="noti-toast" class="notification-toast">
+        <div class="noti-icon" id="noti-icon">🔔</div>
+        <div class="noti-content">
+            <h4 id="noti-title">Notification</h4>
+            <p id="noti-msg">Message content goes here.</p>
+        </div>
+    </div>
+
+    <!-- Multi-Step Service Modal -->
+    <div id="location-modal" class="location-modal">
+        <div class="location-card">
+            <!-- Step 1: Location -->
+            <div id="step-location">
+                <h2 id="loc-modal-title">Confirm Location</h2>
+                <p style="color: var(--text-dim); margin-top: 5px;">Where should we send help?</p>
+                
+                <button class="current-loc-btn" onclick="useCurrentLocation()">
+                    <span id="gps-icon">📍</span> <span id="gps-text">Use My Current Location</span>
+                </button>
+
+                <div class="or-divider">OR ENTER MANUALLY</div>
+
+                <div class="location-input-group">
+                    <input type="text" id="manual-location" placeholder="Street name, landmark, or city...">
+                </div>
+
+                <div style="display: flex; gap: 1rem;">
+                    <button class="btn btn-outline" style="flex: 1;" onclick="closeLocationModal()">Cancel</button>
+                    <button class="btn btn-primary" style="flex: 1;" onclick="goToPaymentStep()">Next: Payment</button>
+                </div>
+            </div>
+
+            <!-- Step 2: Payment Method -->
+            <div id="step-payment" style="display: none;">
+                <h2>Payment Method</h2>
+                <p style="color: var(--text-dim); margin-top: 5px;">How would you like to pay Mike Wilson?</p>
+                
+                <div style="display: grid; gap: 1rem; margin: 2rem 0;">
+                    <label class="payment-option" style="display: block; cursor: pointer;">
+                        <input type="radio" name="pay-method" value="Online" checked style="display: none;">
+                        <div class="pay-card active" onclick="selectPayment(this)">
+                            <span style="font-size: 1.5rem;">💳</span>
+                            <div style="text-align: left; flex: 1;">
+                                <strong>Online Payment</strong>
+                                <div style="font-size: 0.82rem; color: var(--text-dim); margin-top: 4px;">
+                                    UPI (Google Pay, PhonePe), Cards, Net Banking
+                                </div>
+                                <div style="display: flex; gap: 8px; margin-top: 10px; opacity: 0.8;">
+                                    <span style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; border: 1px solid var(--glass-border);">UPI</span>
+                                    <span style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; border: 1px solid var(--glass-border);">VISA/MC</span>
+                                    <span style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; border: 1px solid var(--glass-border);">WALLET</span>
+                                </div>
+                                <!-- UPI Detail Field (Visible when active) -->
+                                <div id="upi-input-container" style="margin-top: 15px; display: none;">
+                                    <input type="text" id="user-upi-id" placeholder="Enter UPI ID (e.g. name@okaxis)" 
+                                        style="width: 100%; padding: 0.8rem; background: rgba(0,0,0,0.2); border: 1px solid var(--primary); border-radius: 8px; color: white; font-size: 0.85rem;">
+                                </div>
+                            </div>
+                            <div class="check-mark">✓</div>
+                        </div>
+                    </label>
+
+                    <label class="payment-option" style="display: block; cursor: pointer;">
+                        <input type="radio" name="pay-method" value="Cash" style="display: none;">
+                        <div class="pay-card" onclick="selectPayment(this)">
+                            <span style="font-size: 1.5rem;">💵</span>
+                            <div style="text-align: left;">
+                                <strong>Cash on Arrival</strong>
+                                <div style="font-size: 0.82rem; color: var(--text-dim); margin-top: 4px;">Pay directly to provider</div>
+                            </div>
+                            <div class="check-mark">✓</div>
+                        </div>
+                    </label>
+                </div>
+
+                <div style="display: flex; gap: 1rem;">
+                    <button class="btn btn-outline" style="flex: 1;" onclick="backToLocationStep()">Back</button>
+                    <button class="btn btn-primary" style="flex: 1;" onclick="submitWithLocation()">Confirm & Request</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Request Loading Overlay -->
+    <div id="request-overlay">
+        <div class="loader"></div>
+        <h2 id="request-title">Processing Request...</h2>
+        <p style="color: var(--text-dim); margin-top: 1rem;">Finding the nearest available service provider...</p>
+    </div>
+
+    <script>
+        // Voice Command Support
+        const voiceTrigger = document.getElementById('voice-trigger');
+        const voiceFeedback = document.getElementById('voice-feedback');
+        const voiceStatus = document.getElementById('voice-status');
+        const voiceTranscript = document.getElementById('voice-transcript');
+        let isListening = false;
+
+        // Initialize user data from storage
+        document.addEventListener('DOMContentLoaded', () => {
+            const userName = localStorage.getItem('userName');
+            if (userName) {
+                document.getElementById('header-user-name').innerText = userName;
+                document.getElementById('header-user-initial').innerText = userName.charAt(0).toUpperCase();
+            }
+        });
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition;
+
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.lang = 'en-US';
+            recognition.interimResults = false;
+
+            recognition.onstart = () => {
+                isListening = true;
+                voiceTrigger.classList.add('listening');
+                voiceFeedback.style.display = 'block';
+                voiceStatus.innerText = "Listening...";
+                voiceTranscript.innerText = "";
+            };
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript.toLowerCase();
+                voiceTranscript.innerText = `"${transcript}"`;
+                
+                if (transcript.includes('fuel') || transcript.includes('gas')) {
+                    showNotification("Voice Command", "Requesting Fuel Delivery...", "success", "🎙️");
+                    setTimeout(() => requestService('Fuel Delivery'), 1000);
+                } else if (transcript.includes('mechanic') || transcript.includes('breakdown')) {
+                    showNotification("Voice Command", "Requesting Breakdown Assistance...", "success", "🎙️");
+                    setTimeout(() => requestService('Breakdown Assistance'), 1000);
+                } else if (transcript.includes('emergency') || transcript.includes('help')) {
+                    showNotification("Voice Command", "Activating Emergency Alert...", "alert", "🚨");
+                    setTimeout(() => requestService('Emergency Alert'), 1000);
+                } else {
+                    voiceStatus.innerText = "Command not recognized. Try again.";
+                }
+            };
+
+            recognition.onend = () => {
+                isListening = false;
+                voiceTrigger.classList.remove('listening');
+                setTimeout(() => {
+                    if (!isListening) voiceFeedback.style.display = 'none';
+                }, 3000);
+            };
+
+            recognition.onerror = (event) => {
+                console.error("Speech Recognition Error:", event.error);
+                isListening = false;
+                voiceTrigger.classList.remove('listening');
+                
+                if (event.error === 'not-allowed') {
+                    voiceStatus.innerText = "Mic access denied. If using local file (file://), browsers block mic. Try using a local server.";
+                    alert("SECURITY BLOCK: Browsers block microphone access when opening HTML files directly (file://). To use voice commands, please run this project on a local server (e.g., Live Server in VS Code).");
+                } else if (event.error === 'no-speech') {
+                    voiceStatus.innerText = "No speech detected. Try again.";
+                } else {
+                    voiceStatus.innerText = `Error: ${event.error}. Check mic permissions.`;
+                }
+            };
+        }
+
+        async function toggleVoice() {
+            if (!SpeechRecognition) {
+                alert("Voice recognition is not supported in this browser.");
+                return;
+            }
+
+            if (isListening) {
+                recognition.stop();
+                return;
+            }
+
+            // Explicitly request mic permission before starting recognition
+            try {
+                voiceStatus.innerText = "Requesting microphone access...";
+                voiceFeedback.style.display = 'block';
+                
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                // Permission granted, stop the temporary stream and start recognition
+                stream.getTracks().forEach(track => track.stop());
+                recognition.start();
+                
+            } catch (err) {
+                console.error("Permission Error:", err);
+                voiceStatus.innerText = "Mic permission denied.";
+                alert("MICROPHONE PERMISSION REQUIRED: Please click 'Allow' in the browser popup to use voice commands. If you are on file://, please use the run_site.bat file provided.");
+                voiceFeedback.style.display = 'none';
+            }
+        }
+        function showNotification(title, msg, type = 'success', icon = '🔔') {
+            const toast = document.getElementById('noti-toast');
+            document.getElementById('noti-title').innerText = title;
+            document.getElementById('noti-msg').innerText = msg;
+            document.getElementById('noti-icon').innerText = icon;
+            
+            toast.className = `notification-toast show ${type}`;
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 5000);
+        }
+
+        let pendingService = null;
+
+        function openLocationModal(type) {
+            pendingService = type;
+            document.getElementById('loc-modal-title').innerText = `Location for ${type}`;
+            document.getElementById('step-location').style.display = 'block';
+            document.getElementById('step-payment').style.display = 'none';
+            document.getElementById('upi-input-container').style.display = 'block'; // Default Online is active
+            document.getElementById('location-modal').style.display = 'flex';
+        }
+
+        function goToPaymentStep() {
+            const loc = document.getElementById('manual-location').value;
+            if (!loc) {
+                alert("Please provide a location first.");
+                return;
+            }
+            document.getElementById('step-location').style.display = 'none';
+            document.getElementById('step-payment').style.display = 'block';
+        }
+
+        function backToLocationStep() {
+            document.getElementById('step-location').style.display = 'block';
+            document.getElementById('step-payment').style.display = 'none';
+        }
+
+        function selectPayment(el) {
+            document.querySelectorAll('.pay-card').forEach(card => card.classList.remove('active'));
+            el.classList.add('active');
+            
+            const radioInput = el.parentElement.querySelector('input');
+            radioInput.checked = true;
+            
+            // Show UPI input if Online is selected
+            const upiContainer = document.getElementById('upi-input-container');
+            if (radioInput.value === 'Online') {
+                upiContainer.style.display = 'block';
+            } else {
+                upiContainer.style.display = 'none';
+            }
+        }
+
+        function closeLocationModal() {
+            document.getElementById('location-modal').style.display = 'none';
+        }
+
+        function useCurrentLocation() {
+            const gpsText = document.getElementById('gps-text');
+            const gpsIcon = document.getElementById('gps-icon');
+            
+            if (!navigator.geolocation) {
+                alert("Geolocation is not supported by your browser.");
+                return;
+            }
+
+            gpsText.innerText = "Acquiring GPS Signal...";
+            gpsIcon.innerText = "🛰️";
+
+            navigator.geolocation.getCurrentPosition((position) => {
+                const lat = position.coords.latitude.toFixed(4);
+                const lng = position.coords.longitude.toFixed(4);
+                document.getElementById('manual-location').value = `GPS: ${lat}, ${lng}`;
+                gpsText.innerText = "Location Acquired!";
+                gpsIcon.innerText = "✅";
+                
+                showNotification("GPS Success", "Current coordinates captured.", "success", "🛰️");
+            }, (err) => {
+                gpsText.innerText = "GPS Error - Enter Manually";
+                gpsIcon.innerText = "❌";
+                showNotification("GPS Error", "Could not fetch location.", "alert", "📍");
+            });
+        }
+
+        function submitWithLocation() {
+            const loc = document.getElementById('manual-location').value;
+            const payMethod = document.querySelector('input[name="pay-method"]:checked').value;
+            
+            closeLocationModal();
+            requestService(pendingService, loc, payMethod);
+        }
+
+        async function requestService(type, location = "Current GPS", payment = "Online") {
+            const overlay = document.getElementById('request-overlay');
+            const title = document.getElementById('request-title');
+            
+            overlay.style.display = 'flex';
+            title.innerText = `Dispatching for ${type}...`;
+
+            try {
+                // Send real POST request to backend API
+                const response = await fetch('http://localhost:3000/api/requests', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userEmail: localStorage.getItem('userEmail') || ('guest' + Math.floor(Math.random()*1000) + '@example.com'),
+                        serviceType: type,
+                        location: location,
+                        paymentMethod: payment
+                    })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    overlay.style.display = 'none';
+                    showNotification(
+                        "Unit Dispatched", 
+                        `${type} confirmed. Paying via: ${payment}`,
+                        'success',
+                        '🚛'
+                    );
+
+                    setTimeout(() => {
+                        window.location.href = `tracking.html?service=${encodeURIComponent(type)}&loc=${encodeURIComponent(location)}&pay=${encodeURIComponent(payment)}&rid=${data.request.id}`;
+                    }, 2000);
+                } else {
+                    alert('Error: ' + data.error);
+                    overlay.style.display = 'none';
+                }
+            } catch (error) {
+                console.error("Error submitting request:", error);
+                alert("Failed to reach server. Please ensure node server.js is running.");
+                overlay.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>
