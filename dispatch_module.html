@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RescueRoad - Dispatch Control Center</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .dispatch-layout {
+            display: grid;
+            grid-template-columns: 400px 1fr;
+            height: 100vh;
+            padding-top: 70px;
+        }
+        .dispatch-sidebar {
+            background: var(--bg-card);
+            border-right: 1px solid var(--glass-border);
+            padding: 1.5rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        #dispatch-map {
+            height: 100%;
+            width: 100%;
+        }
+        .stat-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        .stat-box {
+            background: var(--glass);
+            padding: 1rem;
+            border-radius: 12px;
+            border: 1px solid var(--glass-border);
+            text-align: center;
+        }
+        .stat-box h4 { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; margin-bottom: 0.5rem; }
+        .stat-box p { font-size: 1.5rem; font-weight: 700; color: var(--primary); }
+
+        .monitoring-list {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .monitor-card {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 12px;
+            padding: 1rem;
+            border: 1px solid var(--glass-border);
+            font-size: 0.85rem;
+        }
+        .monitor-card.matching { border-color: var(--secondary); background: rgba(249, 115, 22, 0.05); }
+        .badge {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .badge-pending { background: #f59e0b; color: #000; }
+        .badge-active { background: #10b981; color: #fff; }
+
+        .matching-engine-log {
+            background: #000;
+            color: #10b981;
+            font-family: monospace;
+            padding: 1rem;
+            border-radius: 8px;
+            height: 150px;
+            overflow-y: hidden;
+            font-size: 0.75rem;
+            line-height: 1.4;
+            border: 1px solid #10b98133;
+        }
+
+        /* Leaflet Dark Theme */
+        .leaflet-tile { filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7); }
+    </style>
+</head>
+<body>
+    <header class="glass-header">
+        <nav class="container">
+            <a href="index.html" class="logo">Rescue<span>Road</span></a>
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <span class="badge badge-active">Live System</span>
+                <strong>Ops Command: Alpha-7</strong>
+            </div>
+        </nav>
+    </header>
+
+    <main class="dispatch-layout">
+        <aside class="dispatch-sidebar">
+            <div class="stat-grid">
+                <div class="stat-box">
+                    <h4>Active Requests</h4>
+                    <p id="active-req-count">14</p>
+                </div>
+                <div class="stat-box">
+                    <h4>Providers Near</h4>
+                    <p>82</p>
+                </div>
+            </div>
+
+            <div class="matching-engine-section">
+                <h3 style="font-size: 1rem; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 8px;">
+                    <span class="pulse" style="width: 8px; height: 8px;"></span> Priority Matching Engine
+                </h3>
+                <div id="engine-log" class="matching-engine-log">
+                    <div>> Initializing Neural Dispatch...</div>
+                    <div>> Checking regional load balance...</div>
+                    <div>> Route optimization active...</div>
+                </div>
+            </div>
+
+            <div class="monitoring-list">
+                <h3 style="font-size: 1rem;">Request Monitoring</h3>
+                <div id="monitor-items">
+                    <!-- Cards will be populated dynamically via API -->
+                    <div class="monitor-card matching">
+                        Loading live requests from Priority Dispatch Engine...
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <section id="dispatch-map"></section>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const map = L.map('dispatch-map').setView([12.9716, 77.5946], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        // Simulation Data
+        const providers = [
+            { id: 1, pos: [12.9800, 77.6000], type: 'Towing', status: 'Online' },
+            { id: 2, pos: [12.9650, 77.5850], type: 'Fuel', status: 'Online' },
+            { id: 3, pos: [12.9750, 77.6150], type: 'General', status: 'In Job' },
+            { id: 4, pos: [12.9550, 77.6050], type: 'Towing', status: 'Online' }
+        ];
+
+        const requests = [
+            { id: '882', pos: [12.9716, 77.5946], type: 'Fuel', status: 'Pending' }
+        ];
+
+        // Markers
+        providers.forEach(p => {
+            const color = p.status === 'Online' ? '#10b981' : '#f59e0b';
+            L.circleMarker(p.pos, {
+                radius: 6,
+                fillColor: color,
+                color: "#fff",
+                weight: 1,
+                opacity: 1,
+                fillOpacity: 1
+            }).addTo(map).bindPopup(`Provider: ${p.type} (${p.status})`);
+        });
+
+        const reqMarker = L.circleMarker(requests[0].pos, {
+            radius: 10,
+            fillColor: "#ef4444",
+            color: "#fff",
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.8
+        }).addTo(map).bindPopup("Active Request: Fuel Needed");
+
+        // Matching Simulation Log
+        const logEntries = [
+            "Analyzing traffic on MG Road...",
+            "Provider #2 identified as closest Fuel specialist.",
+            "Distance: 1.4km | Estimated ETA: 4m 12s",
+            "Calculating optimized route (Avoiding repair work on 10th cross)...",
+            "Route optimized. Sending match to Provider #2...",
+            "Awaiting provider acceptance...",
+            "MATCH SUCCESSFUL. Dispatching now."
+        ];
+
+        let logIdx = 0;
+        const logBox = document.getElementById('engine-log');
+
+        function updateLog() {
+            if (logIdx < logEntries.length) {
+                const div = document.createElement('div');
+                div.innerText = "> " + logEntries[logIdx];
+                logBox.appendChild(div);
+                logBox.scrollTop = logBox.scrollHeight;
+                logIdx++;
+                
+                if (logIdx === 4) {
+                    // Show route optimization visual on map
+                    L.polyline([requests[0].pos, providers[1].pos], { 
+                        color: '#3b82f6', 
+                        weight: 4, 
+                        dashArray: '10, 10' 
+                    }).addTo(map);
+                }
+            } else {
+                logIdx = 0;
+                logBox.innerHTML = "<div>> Engine Cycle Restarted...</div>";
+            }
+        }
+        </script>
+    <script>
+        // Set interval for log simulation
+        setInterval(updateLog, 3000);
+
+        async function fetchDispatchRequests() {
+            try {
+                const res = await fetch('http://localhost:3000/api/requests');
+                const reqs = await res.json();
+                document.getElementById('active-req-count').innerText = reqs.length;
+                
+                const container = document.getElementById('monitor-items');
+                if (reqs.length === 0) {
+                    container.innerHTML = '<div class="monitor-card">No active requests currently tracking.</div>';
+                    return;
+                }
+                
+                container.innerHTML = '';
+                reqs.forEach((r, idx) => {
+                    const statusClass = idx % 2 === 0 ? 'matching' : '';
+                    const badgeClass = idx % 2 === 0 ? 'badge-pending' : 'badge-active';
+                    const badgeText = idx % 2 === 0 ? 'Matching' : 'En Route';
+                    
+                    container.innerHTML += `
+                    <div class="monitor-card ${statusClass}">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <strong>${r.service_type} #${r.id.replace('RR-', '')}</strong>
+                            <span class="badge ${badgeClass}">${badgeText}</span>
+                        </div>
+                        <p style="color: var(--text-dim);">Loc: ${r.location}</p>
+                        <div style="margin-top: 8px; font-size: 0.7rem; color: var(--primary);">User: ${r.user_email} | Pay: ${r.payment_method}</div>
+                    </div>`;
+                });
+            } catch (err) {
+                console.error("Dispatch fetch error:", err);
+            }
+        }
+        
+        fetchDispatchRequests();
+        setInterval(fetchDispatchRequests, 4000);
+    </script>
+</body>
+</html>
